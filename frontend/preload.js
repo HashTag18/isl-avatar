@@ -1,7 +1,11 @@
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose safe APIs to the renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
-  version: process.versions.electron
+  version: process.versions.electron,
+
+  // Expose transcription function to React
+  transcribeAudio: (base64Audio) => {
+    return ipcRenderer.invoke('transcribe-audio', base64Audio);
+  }
 });

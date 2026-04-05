@@ -1,19 +1,40 @@
 import { useState } from 'react';
 import { Recorder } from './components/Recorder';
+import { asrService } from './services/asrService';
 
 function App() {
-  const [lastAudio, setLastAudio] = useState(null);
-  const [audioHistory, setAudioHistory] = useState([]);
+  const [transcript, setTranscript] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [latency, setLatency] = useState(null);
+  const [error, setError] = useState('');
+  const [history, setHistory] = useState([]);
 
-  const handleAudioRecorded = (audio) => {
-    console.log('Audio recorded:', audio);
-    setLastAudio(audio);
-    setAudioHistory(prev => [audio, ...prev].slice(0, 5)); // Keep last 5
-  };
+  const handleAudioRecorded = async (audio) => {
+    setIsProcessing(true);
+    setTranscript('');
+    setError('');
+    setLatency(null);
 
-  const playAudio = (url) => {
-    const audio = new Audio(url);
-    audio.play();
+    try {
+      const result = await asrService.transcribeAudio(audio.blob);
+
+      if (result.success) {
+        setTranscript(result.text);
+        setLatency(result.latency);
+        // Add to history
+        setHistory(prev => [
+          { text: result.text, latency: result.latency, time: new Date().toLocaleTimeString() },
+          ...prev
+        ].slice(0, 8));
+      } else {
+        setError(result.error || 'Transcription failed');
+      }
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -25,94 +46,119 @@ function App() {
     }}>
       <h1 style={{ color: '#1a237e', marginBottom: '4px' }}>🤟 ISL Avatar System</h1>
       <p style={{ color: '#666', marginBottom: '32px', fontSize: '16px' }}>
-        Week 1 — Day 2: Microphone Recording
+        Week 1 — Day 3: Speech → Text (Whisper ASR)
       </p>
 
-      {/* Recorder component */}
+      {/* Recorder */}
       <Recorder onAudioRecorded={handleAudioRecorded} />
 
-      {/* Latest recording result */}
-      {lastAudio && (
+      {/* Processing indicator */}
+      {isProcessing && (
         <div style={{
-          marginTop: '24px',
-          padding: '20px',
-          backgroundColor: '#e8f5e9',
-          borderRadius: '12px',
-          border: '1px solid #a5d6a7'
+          marginTop: '20px',
+          padding: '16px',
+          backgroundColor: '#fff8e1',
+          borderRadius: '10px',
+          border: '1px solid #ffe082',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
         }}>
-          <h3 style={{ margin: '0 0 12px 0', color: '#2e7d32' }}>
-            ✅ Recording Captured!
-          </h3>
-          <div style={{ display: 'flex', gap: '30px', marginBottom: '16px' }}>
-            <div>
-              <strong>Size:</strong> {(lastAudio.size / 1024).toFixed(1)} KB
-            </div>
-            <div>
-              <strong>Duration:</strong> {(lastAudio.duration / 1000).toFixed(1)}s
-            </div>
+          <span style={{ fontSize: '20px' }}>⏳</span>
+          <div>
+            <strong>Whisper is transcribing...</strong>
+            <p style={{ margin: '4px 0 0 0', color: '#888', fontSize: '13px' }}>
+              First run loads the model (~3 seconds). After that it's faster!
+            </p>
           </div>
-          <button
-            onClick={() => playAudio(lastAudio.url)}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#1976d2',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 'bold'
-            }}
-          >
-            🔊 Play Back Recording
-          </button>
         </div>
       )}
 
-      {/* Recording history */}
-      {audioHistory.length > 1 && (
-        <div style={{ marginTop: '24px' }}>
-          <h3 style={{ color: '#333' }}>📋 Recording History</h3>
-          {audioHistory.map((audio, i) => (
+      {/* Transcript result */}
+      {transcript && !isProcessing && (
+        <div style={{
+          marginTop: '20px',
+          padding: '20px',
+          backgroundColor: '#e8f5e9',
+          borderRadius: '10px',
+          border: '1px solid #a5d6a7'
+        }}>
+          <h3 style={{ margin: '0 0 10px 0', color: '#2e7d32' }}>✅ Transcription</h3>
+          <p style={{
+            fontSize: '20px',
+            fontWeight: 'bold',
+            color: '#1b5e20',
+            margin: '0 0 12px 0',
+            padding: '10px',
+            backgroundColor: 'white',
+            borderRadius: '6px',
+            border: '1px solid #c8e6c9'
+          }}>
+            "{transcript}"
+          </p>
+          {latency && (
+            <span style={{
+              fontSize: '13px',
+              color: latency < 3000 ? '#388e3c' : '#f57c00',
+              fontWeight: 'bold'
+            }}>
+              ⚡ Latency: {(latency / 1000).toFixed(1)}s
+              {latency < 3000 ? ' ✓ Good' : ' (model warming up)'}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div style={{
+          marginTop: '20px',
+          padding: '16px',
+          backgroundColor: '#ffebee',
+          borderRadius: '10px',
+          border: '1px solid #ef9a9a',
+          color: '#c62828'
+        }}>
+          ⚠️ Error: {error}
+        </div>
+      )}
+
+      {/* History */}
+      {history.length > 0 && (
+        <div style={{ marginTop: '28px' }}>
+          <h3 style={{ color: '#333', marginBottom: '12px' }}>📋 Transcript History</h3>
+          {history.map((item, i) => (
             <div key={i} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px',
               padding: '10px 16px',
               marginBottom: '8px',
               backgroundColor: '#f5f5f5',
-              borderRadius: '8px'
+              borderRadius: '8px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
             }}>
-              <span style={{ color: '#888', fontSize: '13px' }}>#{audioHistory.length - i}</span>
-              <span>{(audio.duration / 1000).toFixed(1)}s</span>
-              <span style={{ color: '#888' }}>{(audio.size / 1024).toFixed(1)} KB</span>
-              <button
-                onClick={() => playAudio(audio.url)}
-                style={{
-                  padding: '6px 14px',
-                  backgroundColor: '#1976d2',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '13px'
-                }}
-              >
-                🔊 Play
-              </button>
+              <span style={{ fontSize: '15px' }}>"{item.text}"</span>
+              <div style={{ display: 'flex', gap: '12px', color: '#888', fontSize: '12px' }}>
+                <span>⚡ {(item.latency / 1000).toFixed(1)}s</span>
+                <span>🕐 {item.time}</span>
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Progress tracker */}
-      <div style={{ marginTop: '32px', padding: '16px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+      {/* Progress */}
+      <div style={{
+        marginTop: '32px', padding: '16px',
+        backgroundColor: '#f5f5f5', borderRadius: '8px'
+      }}>
         <h4 style={{ margin: '0 0 8px 0' }}>📋 Week 1 Progress</h4>
         <ul style={{ margin: 0, lineHeight: '2', paddingLeft: '20px' }}>
           <li>✅ Day 1: Project setup</li>
           <li>✅ Day 2: Microphone recording</li>
-          <li>⬜ Day 3-4: Whisper ASR (speech-to-text)</li>
-          <li>⬜ Day 5: Testing + polish</li>
+          <li>✅ Day 3: Whisper ASR (speech → text)</li>
+          <li>⬜ Day 4: Latency tuning + testing</li>
+          <li>⬜ Day 5: Polish + commit</li>
         </ul>
       </div>
     </div>

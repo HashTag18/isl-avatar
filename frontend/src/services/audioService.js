@@ -9,13 +9,14 @@ export class AudioService {
   async startRecording() {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false,
-          sampleRate: 16000
-        }
-      });
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,   // Change false → true
+    sampleRate: 16000,
+    channelCount: 1          // Mono is better for speech recognition
+  }
+});
 
       this.mediaRecorder = new MediaRecorder(this.stream);
       this.audioChunks = [];
